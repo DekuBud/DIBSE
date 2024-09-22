@@ -1,0 +1,6 @@
+16:26:14 **** Incremental Build of configuration Debug for project MultiThread ****
+make all 
+make: Nothing to be done for 'all'.
+
+16:26:14 Build Finished. 0 errors, 0 warnings. (took 124ms)
+

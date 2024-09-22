@@ -1,0 +1,131 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/wait.h>
+#include <fcntl.h>
+
+// Buffer-Größe für Benutzereingaben
+#define BUFFER_SIZE 1024
+
+// Funktion, um zu überprüfen, ob es sich um eine Skriptdatei handelt
+int is_script(const char *filename) {
+    int fd = open(filename, O_RDONLY);
+    if (fd < 0) {
+        perror("open");
+        return -1;
+    }
+
+    char buffer[2];
+    // Lese die ersten zwei Bytes (Magic Number)
+    if (read(fd, buffer, 2) != 2) {
+        perror("read");
+        close(fd);
+        return -1;
+    }
+    close(fd);
+
+    // Überprüfe, ob es sich um ein Skript handelt (Shebang: "#!")
+    if (buffer[0] == '#' && buffer[1] == '!') {
+        return 1; // Es ist ein Skript
+    }
+    return 0; // Es ist kein Skript
+}
+
+// Hauptfunktion der Shell
+int main() {
+    char input[BUFFER_SIZE]; // Buffer für Benutzereingaben
+    char *args[64];          // Array für Argumente (max. 64 Argumente)
+
+    while (1) {
+        // Ausgabe des Prompts
+        printf("> ");
+        fflush(stdout);
+
+        // Einlesen der Benutzereingabe
+        if (fgets(input, BUFFER_SIZE, stdin) == NULL) {
+            perror("fgets");
+            continue;
+        }
+
+        // Entferne das neue Zeilenzeichen am Ende der Eingabe
+        input[strcspn(input, "\n")] = 0;
+
+        // Beende die Shell bei Eingabe von "exit"
+        if (strcmp(input, "exit") == 0) {
+            break;
+        }
+
+        // Parsen der Eingabe in Argumente
+        int i = 0;
+        char *token = strtok(input, " ");
+        while (token != NULL) {
+            args[i++] = token;
+            token = strtok(NULL, " ");
+        }
+        args[i] = NULL; // Letztes Element auf NULL setzen
+
+        if (args[0] == NULL) {
+            // Leere Eingabe ignorieren
+            continue;
+        }
+
+        // Überprüfe, ob das erste Argument (Programm) ein Skript ist
+        int script = is_script(args[0]);
+
+        // Fork für neuen Prozess
+        pid_t pid = fork();
+        if (pid < 0) {
+            perror("fork");
+            continue;
+        }
+
+        if (pid == 0) { // Kindprozess
+            if (script == 1) {
+                // Es ist ein Skript
+                // Lese die erste Zeile des Skripts, um den Interpreter zu bestimmen
+                FILE *file = fopen(args[0], "r");
+                if (!file) {
+                    perror("fopen");
+                    exit(EXIT_FAILURE);
+                }
+
+                char shebang[BUFFER_SIZE];
+                if (fgets(shebang, BUFFER_SIZE, file) == NULL) {
+                    perror("fgets");
+                    fclose(file);
+                    exit(EXIT_FAILURE);
+                }
+                fclose(file);
+
+                // Entferne das "#!" am Anfang und das Newline-Zeichen am Ende
+                shebang[strcspn(shebang, "\n")] = 0;
+                char *interpreter = shebang + 2; // Überspringe "#!"
+
+                // Setze die Argumente für den Interpreter
+                char *script_args[64];
+                script_args[0] = interpreter;
+                script_args[1] = args[0]; // Der Pfad zur Skriptdatei als Argument
+                for (int j = 1; args[j] != NULL; j++) {
+                    script_args[j + 1] = args[j]; // Übernehme weitere Argumente
+                }
+                script_args[i + 1] = NULL; // Terminierung
+
+                // Führe das Skript mit dem entsprechenden Interpreter aus
+                execv(interpreter, script_args);
+                perror("execv");
+                exit(EXIT_FAILURE);
+            } else {
+                // Es ist ein natives Programm
+                execv(args[0], args); // Führe das Programm aus
+                perror("execv"); // execv gibt nur bei Fehler zurück
+                exit(EXIT_FAILURE);
+            }
+        } else { // Elternprozess
+            // Warte auf den Kindprozess
+            waitpid(pid, NULL, 0);
+        }
+    }
+
+    return 0;
+}

@@ -1,0 +1,33 @@
+# Name of the binary
+BINARY = atomic
+
+# Object files
+OBJS   = atomic.o
+
+# Compiler flags (for C)
+CFLAGS = -Werror -Wall -pthread
+
+# Linker flags (include pthread for linking)
+LFLAGS = -pthread
+
+# all target: builds all important targets
+all: ${BINARY}
+
+# Links the binary
+${BINARY}: ${OBJS}
+	gcc ${LFLAGS} -o ${BINARY} ${OBJS}
+
+# Compiles a source-file (any file with file extension .c) into an object-file
+%.o: %.c
+	gcc ${CFLAGS} -c -o $@ $<
+
+# Run the shell
+run: ${BINARY}
+	./${BINARY}
+
+# Delete all build artifacts
+clean:
+	rm -rf ${BINARY} ${OBJS}
+
+# all and clean are "phony" targets
+.PHONY: all clean
