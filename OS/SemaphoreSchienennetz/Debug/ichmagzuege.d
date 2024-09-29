@@ -1,0 +1,1 @@
+ichmagzuege.o: ../ichmagzuege.c
